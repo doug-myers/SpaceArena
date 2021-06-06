@@ -961,7 +961,7 @@ while not game_over:
                         sprite.reset()
                         player.health -= 10
 
-        if bomb_explosion == "active" and bomb_explosion.is_collision(player):
+        if bomb_explosion.state == "active" and bomb_explosion.is_collision(player):
             player.health -= 10
 
         # Update the camera
