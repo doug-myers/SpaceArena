@@ -13,6 +13,9 @@
 # - Added star background
 # - Double enemies each level
 # - Add sound
+# - Bomb Power-up
+# - Extra lives each 500 points
+# - Time throttle to keep at 60 fps
 import time
 import turtle
 import math
@@ -59,7 +62,7 @@ class Game:
     NUM_FRAME_TIMES = 500
 
     def __init__(self, width, height):
-        self.target_frame_time = 1/60
+        self.target_frame_time = 1 / 60
         self.frame_time_index = 0
         self.total_frame_times = 0
         self.frame_times = []
@@ -90,8 +93,8 @@ class Game:
         sprites.append(bomb)
 
         # Add enemies
-        Enemy.count = 2**self.level
-        for _ in range(2**self.level):
+        Enemy.count = 2 ** self.level
+        for _ in range(2 ** self.level):
             # Pick a random location away from the player
             while True:
                 x = random.randint(-self.width / 2, self.width / 2)
@@ -149,7 +152,7 @@ class Game:
         pen.goto(INFO_CENTER, 0)
         pen.shape("square")
         pen.setheading(90)
-        pen.shapesize(10, SCREEN_HEIGHT/20, None)
+        pen.shapesize(10, SCREEN_HEIGHT / 20, None)
         pen.stamp()
 
         separator_x = INFO_CENTER - INFO_WIDTH / 2
@@ -288,10 +291,10 @@ class Sprite:
         self.on_screen = True
 
     def is_collision(self, other):
-        if self.on_screen and self.x - self.width/2 < other.x + other.width/2 and \
-                self.x + self.width/2 > other.x - other.width/2 and \
-                self.y - self.height/2 < other.y + other.height/2 and \
-                self.y + self.height/2 > other.y - other.width/2:
+        if self.on_screen and self.x - self.width / 2 < other.x + other.width / 2 and \
+                self.x + self.width / 2 > other.x - other.width / 2 and \
+                self.y - self.height / 2 < other.y + other.height / 2 and \
+                self.y + self.height / 2 > other.y - other.width / 2:
             return True
         else:
             return False
@@ -395,6 +398,7 @@ class Sprite:
 class Player(Sprite):
     def __init__(self):
         Sprite.__init__(self, 0, 0, "triangle", "white")
+        self.explode_count = 0
         self.lives = 3
         self.score = 0
         self.heading = 90
@@ -485,25 +489,48 @@ class Player(Sprite):
 
             # Check health
             if self.health <= 0:
+                self.state = "exploding"
+                self.explode_count = 60;
+                self.color = "black"
+                self.explode()
+
+        elif self.state == "exploding":
+            self.explode_count -= 1
+            if self.explode_count <= 0:
                 self.reset()
 
     def reset(self):
         global game_over
         self.lives -= 1
         if self.lives > 0:
-            self.x = 0
-            self.y = 0
+            # Pick a random location away from enemies
+            range = COLLISION_CHECK_RANGE
+            while True:
+                self.x = random.randint(-game.width / 2, game.width / 2)
+                self.y = random.randint(-game.height / 2, game.height / 2)
+                found = True
+                for sprite in sprites:
+                    if isinstance(sprite, Enemy) and \
+                            abs(sprite.x - self.x) < range and \
+                            abs(sprite.y - self.y) < range:
+                        found = False
+                        break
+                if found:
+                    break
+                range -= 1
             self.health = self.max_health
             self.heading = 90
             self.dx = 0
             self.dy = 0
+            self.state = "active"
+            self.color = "white"
         else:
             game_over = True
 
     def render(self, pen, x_offset, y_offset):
         if self.thrust > 0:
             # Render rocket fire
-            flame = self.thrust/2.0
+            flame = self.thrust / 2.0
             x = self.x - 10 * math.cos(math.radians(self.heading))
             y = self.y - 10 * math.sin(math.radians(self.heading))
             if flame > 0.5:
@@ -696,7 +723,7 @@ class Explosion(Sprite):
     def update(self):
         if self.state == "active":
             self.time += 1
-            self.width = 20 + (self.max_size-20) * self.time / self.max_time
+            self.width = 20 + (self.max_size - 20) * self.time / self.max_time
             self.height = self.width
             if self.time >= self.max_time:
                 self.state = "ready"
@@ -704,7 +731,7 @@ class Explosion(Sprite):
     def render(self, pen, x_offset, y_offset):
         if self.state == "active":
             if self.is_on_screen(x_offset, y_offset):
-                i = len(self.colors) * self.time // (self.max_time+1)
+                i = len(self.colors) * self.time // (self.max_time + 1)
                 size = self.width / 20
                 pen.shapesize(size, size, None)
                 pen.goto(self.x - x_offset, self.y - y_offset)
@@ -720,6 +747,7 @@ class BombExplosion(Explosion):
         Explosion.__init__(self, 0, 0)
         self.max_size = 200.0
         self.state = "ready"
+
 
 class Enemy(Sprite):
     count = 0
@@ -799,6 +827,9 @@ class Enemy(Sprite):
         Enemy.count -= 1
         self.explode()
         player.score += self.score
+        if player.score % 500 < self.score:
+            winsound.PlaySound("powerup.wav", winsound.SND_ASYNC)
+            player.lives += 1
         if player.score > high_score:
             high_score = player.score
             hs_file = open("highscore.txt", "w")
@@ -864,8 +895,8 @@ class Radar():
                 # Make sure the sprite is close to the player
                 distance = ((player.x - sprite.x) ** 2 + (player.y - sprite.y) ** 2) ** 0.5
                 if distance < self.range:
-                    radar_x = self.x + (sprite.x - player.x) * (self.radius/self.range)
-                    radar_y = self.y + (sprite.y - player.y) * (self.radius/self.range)
+                    radar_x = self.x + (sprite.x - player.x) * (self.radius / self.range)
+                    radar_y = self.y + (sprite.y - player.y) * (self.radius / self.range)
                     pen.goto(radar_x, radar_y)
                     pen.color(sprite.color)
                     pen.shape("circle")
@@ -1033,4 +1064,3 @@ while not game_over:
 character_pen.scale = 3.0
 character_pen.draw_string(pen, "GAME OVER", 0, 0)
 wn.mainloop()
-
