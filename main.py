@@ -13,6 +13,7 @@
 # - Added star background
 # - Double enemies each level
 # - Add sound
+import time
 import turtle
 import math
 import random
@@ -55,7 +56,17 @@ wn.register_shape("hunter.gif")
 
 
 class Game:
+    NUM_FRAME_TIMES = 500
+
     def __init__(self, width, height):
+        self.target_frame_time = 1/60
+        self.frame_time_index = 0
+        self.total_frame_times = 0
+        self.frame_times = []
+        for i in range(Game.NUM_FRAME_TIMES):
+            self.frame_times.append(0.0)
+        self.max_frame_time = 0
+        self.last_frame_time = 0
         self.width = width
         self.height = height
         self.level = 1
@@ -98,7 +109,7 @@ class Game:
             y = random.randint(-self.height / 2, self.height / 2)
             dx = random.randint(-2, 2) * game_speed
             dy = random.randint(-2, -2) * game_speed
-            sprites.append(Powerup(x, y, "powerup.gif", "blue", "multishot", dx, dy))
+            sprites.append(Powerup(x, y, "powerup.gif", "white", "multishot", dx, dy))
 
         for _ in range(1):
             x = random.randint(-self.width / 2, self.width / 2)
@@ -112,7 +123,7 @@ class Game:
             y = random.randint(-self.height / 2, self.height / 2)
             dx = random.randint(-2, 2) * game_speed
             dy = random.randint(-2, -2) * game_speed
-            sprites.append(Powerup(x, y, "powerup3.gif", "red", "bomb", dx, dy))
+            sprites.append(Powerup(x, y, "powerup3.gif", "yellow", "bomb", dx, dy))
 
     def render_border(self, pen, x_offset, y_offset):
         pen.color("white")
@@ -151,19 +162,42 @@ class Game:
         pen.penup()
         pen.color("white")
         character_pen.scale = 1.0
-        character_pen.draw_string(pen, "SPACE ARENA", INFO_CENTER, 270)
-        character_pen.draw_string(pen, "SCORE {}".format(score), INFO_CENTER, 230)
-        character_pen.draw_string(pen, "HIGH SCORE", INFO_CENTER, 190)
-        character_pen.draw_string(pen, str(highscore), INFO_CENTER, 160)
-        character_pen.draw_string(pen, "ENEMIES {}".format(active_enemies), INFO_CENTER, 120)
-        character_pen.draw_string(pen, "LIVES {}".format(player.lives), INFO_CENTER, 80)
-        character_pen.draw_string(pen, "LEVEL {}".format(game.level), INFO_CENTER, 40)
-        character_pen.draw_string(pen, "MULTISHOTS".format(player.multishot), INFO_CENTER, 0)
-        character_pen.draw_string(pen, str(player.multishot), INFO_CENTER, -30)
-        character_pen.draw_string(pen, "BOMBS {}".format(player.bombs), INFO_CENTER, -70)
+        character_pen.draw_string(pen, "SPACE ARENA", INFO_CENTER, 370)
+        character_pen.draw_string(pen, "SCORE {}".format(score), INFO_CENTER, 330)
+        character_pen.draw_string(pen, "HIGH SCORE", INFO_CENTER, 290)
+        character_pen.draw_string(pen, str(highscore), INFO_CENTER, 260)
+        character_pen.draw_string(pen, "ENEMIES {}".format(active_enemies), INFO_CENTER, 220)
+        character_pen.draw_string(pen, "LIVES {}".format(player.lives), INFO_CENTER, 180)
+        character_pen.draw_string(pen, "LEVEL {}".format(game.level), INFO_CENTER, 140)
+        character_pen.draw_string(pen, "MULTISHOTS".format(player.multishot), INFO_CENTER, 100)
+        character_pen.draw_string(pen, str(player.multishot), INFO_CENTER, 70)
+        character_pen.draw_string(pen, "BOMBS {}".format(player.bombs), INFO_CENTER, 30)
 
     def start(self):
         self.state = "playing"
+
+    def fps_delay(self):
+        if self.last_frame_time > 0:
+            t = time.time()
+            actual = t - self.last_frame_time
+            if actual > self.max_frame_time:
+                self.max_frame_time = actual
+            self.total_frame_times -= self.frame_times[self.frame_time_index]
+            self.total_frame_times += actual
+            self.frame_times[self.frame_time_index] = actual
+            self.frame_time_index += 1
+            self.frame_time_index %= Game.NUM_FRAME_TIMES
+            delay = self.target_frame_time - actual
+            if delay < 0.0001:
+                delay = 0.0001
+            time.sleep(delay)
+        self.last_frame_time = time.time()
+
+    def print_frame_time_stats(self):
+        avg_frame_time = self.total_frame_times / Game.NUM_FRAME_TIMES
+        print("Target Frame Time:  {}".format(self.target_frame_time))
+        print("Average Frame Time: {}".format(avg_frame_time))
+        print("Max Frame Time:     {}".format(self.max_frame_time))
 
 
 # Splash Screen
@@ -551,7 +585,7 @@ class Bomb(Sprite):
     max_fuse = 50
 
     def __init__(self):
-        Sprite.__init__(self, 0, 0, "bomb.gif", "red")
+        Sprite.__init__(self, 0, 0, "bomb.gif", "yellow")
         self.state = "ready"
         self.thrust = 8.0
         self.fuse = Bomb.max_fuse
@@ -889,6 +923,8 @@ wn.onkeypress(player.drop_bomb, "Down")
 wn.onkeypress(game.start, "s")
 wn.onkeypress(game.start, "S")
 
+wn.onkeypress(game.print_frame_time_stats, "f")
+
 # Main Loop
 game_over = False
 while not game_over:
@@ -988,6 +1024,8 @@ while not game_over:
 
         # Render the radar
         radar.render(pen, sprites)
+
+        game.fps_delay()
 
         # Update the screen
         wn.update()
