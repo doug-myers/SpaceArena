@@ -269,7 +269,7 @@ wn.tracer(0)
 
 class Sprite:
     # Constructor
-    def __init__(self, x, y, shape, color, dx=0, dy=0):
+    def __init__(self, x, y, shape, color, dx=0.0, dy=0.0):
         self.x = x
         self.y = y
         self.shape = shape
@@ -381,18 +381,19 @@ class Sprite:
 
         pen.penup()
 
-    def explode(self):
+    def explode(self, max_size=60):
         winsound.PlaySound("Explosion+7.wav", winsound.SND_ASYNC)
         found = False
         for explosion in explosions:
             if explosion.state == "ready":
+                explosion.reset(self.x, self.y)
+                explosion.max_size = max_size
                 found = True
                 break
         if not found:
             explosion = Explosion(self.x, self.y)
+            explosion.max_size = max_size
             explosions.append(explosion)
-        else:
-            explosion.reset(self.x, self.y)
 
 
 class Player(Sprite):
@@ -490,7 +491,7 @@ class Player(Sprite):
             # Check health
             if self.health <= 0:
                 self.state = "exploding"
-                self.explode_count = 60;
+                self.explode_count = 60
                 self.color = "black"
                 self.explode()
 
@@ -630,7 +631,7 @@ class Bomb(Sprite):
             self.fuse -= 1
             if self.fuse <= 0:
                 self.reset()
-                self.explode()
+                self.explode(200)
 
     def reset(self):
         self.fuse = Bomb.max_fuse
@@ -642,10 +643,6 @@ class Bomb(Sprite):
             pen.shape(self.shape)
             pen.color(self.color)
             pen.stamp()
-
-    def explode(self):
-        winsound.PlaySound("Explosion+7.wav", winsound.SND_ASYNC)
-        bomb_explosion.reset(self.x, self.y)
 
 
 class EnemyMissile(Sprite):
@@ -740,13 +737,6 @@ class Explosion(Sprite):
                 pen.stamp()
 
                 pen.shapesize(1.0, 1.0, None)
-
-
-class BombExplosion(Explosion):
-    def __init__(self):
-        Explosion.__init__(self, 0, 0)
-        self.max_size = 200.0
-        self.state = "ready"
 
 
 class Enemy(Sprite):
@@ -861,7 +851,7 @@ class Powerup(Sprite):
         self.y = random.randint(-game.height / 2, game.height / 2)
 
 
-class Camera():
+class Camera:
     def __init__(self, x, y):
         self.x = x
         self.y = y
@@ -871,7 +861,7 @@ class Camera():
         self.y = y
 
 
-class Radar():
+class Radar:
     def __init__(self, x, y, radius):
         self.x = x
         self.y = y
@@ -927,14 +917,13 @@ for _ in range(3):
 
 # Create bomb object
 bomb = Bomb()
-bomb_explosion = BombExplosion()
 
 explosions = []
 
 # Sprites list
 sprites = []
 
-# Setup the level
+# Set up the level
 game.start_level()
 
 # Keyboard bindings
@@ -981,7 +970,6 @@ while not game_over:
         # Update explosions
         for explosion in explosions:
             explosion.update()
-        bomb_explosion.update()
 
         # Fire enemy missiles
         for sprite in sprites:
@@ -1010,8 +998,9 @@ while not game_over:
                     if bomb.state == "active" and bomb.is_collision(sprite):
                         bomb.fuse = 0
 
-                    if bomb_explosion.state == "active" and bomb_explosion.is_collision(sprite):
-                        sprite.health -= 10
+                    for explosion in explosions:
+                        if explosion.state == "active" and explosion.is_collision(sprite):
+                            sprite.health -= 5
 
                 if isinstance(sprite, Powerup):
                     if player.is_collision(sprite):
@@ -1028,8 +1017,9 @@ while not game_over:
                         sprite.reset()
                         player.health -= 10
 
-        if bomb_explosion.state == "active" and bomb_explosion.is_collision(player):
-            player.health -= 10
+        for explosion in explosions:
+            if explosion.state == "active" and explosion.is_collision(player):
+                player.health -= 5
 
         # Update the camera
         camera.update(player.x + CAMERA_OFFSET, player.y)
@@ -1041,7 +1031,6 @@ while not game_over:
         # Render explosions
         for explosion in explosions:
             explosion.render(pen, camera.x, camera.y)
-        bomb_explosion.render(pen, camera.x, camera.y)
 
         game.render_border(pen, camera.x, camera.y)
 
